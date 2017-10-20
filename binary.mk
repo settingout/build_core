@@ -30,6 +30,15 @@ else
   endif
 endif
 
+# Many qcom modules don't correctly set a dependency on the kernel headers. Fix it for them,
+# but warn the user.
+ifneq (,$(findstring $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include,$(LOCAL_C_INCLUDES)))
+  ifeq (,$(findstring $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr,$(LOCAL_ADDITIONAL_DEPENDENCIES)))
+    $(warning $(LOCAL_MODULE) uses kernel headers, but does not depend on them!)
+    LOCAL_ADDITIONAL_DEPENDENCIES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
+  endif
+endif
+
 # The following LOCAL_ variables will be modified in this file.
 # Because the same LOCAL_ variables may be used to define modules for both 1st arch and 2nd arch,
 # we can't modify them in place.
@@ -183,11 +192,6 @@ ifeq ($(USE_CLANG_PLATFORM_BUILD),true)
     ifeq ($(my_clang),)
         my_clang := true
     endif
-endif
-
-# Include DragonTC Optimizations
-ifneq ($(DISABLE_DTC_OPTS),true)
-  include $(BUILD_SYSTEM)/dragontc.mk
 endif
 
 # arch-specific static libraries go first so that generic ones can depend on them
@@ -543,17 +547,44 @@ proto_generated_headers := $(patsubst %.pb$(my_proto_source_suffix),%.pb.h, $(pr
 proto_generated_objects := $(addprefix $(proto_generated_obj_dir)/, \
     $(patsubst %.proto,%.pb.o,$(proto_sources_fullpath)))
 
+define copy-proto-files
+$(if $(PRIVATE_PROTOC_OUTPUT), \
+   $(if $(call streq,$(PRIVATE_PROTOC_INPUT),$(PRIVATE_PROTOC_OUTPUT)),, \
+   $(eval proto_generated_path := $(dir $(subst $(PRIVATE_PROTOC_INPUT),$(PRIVATE_PROTOC_OUTPUT),$@)))
+   @mkdir -p $(dir $(proto_generated_path))
+   @echo "Protobuf relocation: $@ => $(proto_generated_path)"
+   @cp -f $@ $(proto_generated_path) ),)
+endef
+
+
 # Ensure the transform-proto-to-cc rule is only defined once in multilib build.
 ifndef $(my_prefix)_$(LOCAL_MODULE_CLASS)_$(LOCAL_MODULE)_proto_defined
 $(proto_generated_sources): PRIVATE_PROTO_INCLUDES := $(TOP)
 $(proto_generated_sources): PRIVATE_PROTOC_FLAGS := $(LOCAL_PROTOC_FLAGS) $(my_protoc_flags)
+$(proto_generated_sources): PRIVATE_PROTOC_OUTPUT := $(LOCAL_PROTOC_OUTPUT)
+$(proto_generated_sources): PRIVATE_PROTOC_INPUT := $(LOCAL_PATH)
 $(proto_generated_sources): $(proto_generated_sources_dir)/%.pb$(my_proto_source_suffix): %.proto $(PROTOC)
 	$(transform-proto-to-cc)
+	$(copy-proto-files)
 
 # This is just a dummy rule to make sure gmake doesn't skip updating the dependents.
+$(proto_generated_headers): PRIVATE_PROTOC_OUTPUT := $(LOCAL_PROTOC_OUTPUT)
+$(proto_generated_headers): PRIVATE_PROTOC_INPUT := $(LOCAL_PATH)
 $(proto_generated_headers): $(proto_generated_sources_dir)/%.pb.h: $(proto_generated_sources_dir)/%.pb$(my_proto_source_suffix)
 	@echo "Updated header file $@."
 	$(hide) touch $@
+	$(copy-proto-files)
+
+$(if $(LOCAL_PROTOC_OUTPUT), \
+$(if $(call streq,$(LOCAL_PROTOC_OUTPUT),$(LOCAL_PATH)),, \
+  $(eval proto_relocated_headers := $(subst $(LOCAL_PATH),$(LOCAL_PROTOC_OUTPUT),$(proto_generated_headers))) \
+ ), )
+
+ifdef proto_relocated_headers
+$(proto_relocated_headers): $(proto_generated_headers)
+	echo "Refreshed header file $@."
+	$(hide) touch $@
+endif
 
 $(my_prefix)_$(LOCAL_MODULE_CLASS)_$(LOCAL_MODULE)_proto_defined := true
 endif  # transform-proto-to-cc rule included only once
