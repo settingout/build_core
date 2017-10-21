@@ -6,19 +6,9 @@ WITHOUT_TARGET_CLANG := true
 WITHOUT_HOST_CLANG := true
 endif
 
-# Set LLVM version for DragonTC
-TARGET_DRAGONTC_VERSION := 
-
-ifeq ($(TARGET_DRAGONTC_VERSION),)
-LLVM_PREBUILTS_VERSION := 3.6
+LLVM_PREBUILTS_VERSION := 3.8
 LLVM_PREBUILTS_PATH := prebuilts/clang/$(BUILD_OS)-x86/host/$(LLVM_PREBUILTS_VERSION)/bin
-LLVM_RTLIB_PATH := $(LLVM_PREBUILTS_PATH)/../lib/clang/$(LLVM_PREBUILTS_VERSION)%/lib/linux/
-export AOSP_CLANG := $(LLVM_PREBUILTS_PATH)/clang$(BUILD_EXECUTABLE_SUFFIX)
-export AOSP_LLVM_LINK := $(LLVM_PREBUILTS_PATH)/llvm-link$(BUILD_EXECUTABLE_SUFFIX)
-export AOSP_LLVM_AS := $(LLVM_PREBUILTS_PATH)/llvm-as$(BUILD_EXECUTABLE_SUFFIX)
-else
-include prebuilts/clang/linux-x86/host/$(TARGET_DRAGONTC_VERSION)/DragonTC.mk
-endif
+LLVM_RTLIB_PATH := $(LLVM_PREBUILTS_PATH)/../lib/clang/$(LLVM_PREBUILTS_VERSION)/lib/linux/
 
 CLANG := $(LLVM_PREBUILTS_PATH)/clang$(BUILD_EXECUTABLE_SUFFIX)
 CLANG_CXX := $(LLVM_PREBUILTS_PATH)/clang++$(BUILD_EXECUTABLE_SUFFIX)
@@ -62,11 +52,6 @@ CLANG_CONFIG_EXTRA_CFLAGS += \
 CLANG_CONFIG_EXTRA_CPPFLAGS += \
   -Wno-inconsistent-missing-override
 
-# Force clang to always output color diagnostics.  Ninja will strip the ANSI
-# color codes if it is not running in a terminal.
-CLANG_CONFIG_EXTRA_CFLAGS += \
-  -fcolor-diagnostics
-
 CLANG_CONFIG_UNKNOWN_CFLAGS := \
   -finline-functions \
   -finline-limit=64 \
@@ -92,8 +77,7 @@ CLANG_CONFIG_UNKNOWN_CFLAGS := \
   -Wno-unused-but-set-variable \
   -Wno-unused-local-typedefs \
   -Wunused-but-set-parameter \
-  -Wunused-but-set-variable \
-  -fdiagnostics-color
+  -Wunused-but-set-variable
 
 # Clang flags for all host rules
 CLANG_CONFIG_HOST_EXTRA_ASFLAGS :=
